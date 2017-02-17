@@ -3,7 +3,11 @@ module MagnetPlayground exposing (..)
 import MagnetPieces exposing (..)
 import Svg exposing (Svg, svg)
 import Svg.Attributes exposing (viewBox)
-import Html
+import Html exposing (div)
+import Html.Attributes
+import Mouse exposing (Position)
+import Html.Events exposing (on)
+import Json.Decode as Decode
 
 
 colors =
@@ -27,6 +31,7 @@ type alias Shape =
 type alias Model =
     { shapes : List Shape
     , drag : Maybe Drag
+    , mouseOver : Maybe Point
     }
 
 
@@ -37,13 +42,10 @@ type alias Drag =
 
 
 type Msg
-    = NothingYet
-
-
-
--- | DragStart Position
--- | DragAt Position
--- | DragEnd Position
+    = DragStart Position
+    | DragAt Position
+    | DragEnd Position
+    | MouseOver Position
 
 
 init : ( Model, Cmd Msg )
@@ -57,6 +59,7 @@ init =
               }
             ]
       , drag = Nothing
+      , mouseOver = Nothing
       }
     , Cmd.none
     )
@@ -68,9 +71,13 @@ init =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    ( model
-    , Cmd.none
-    )
+    let
+        _ =
+            Debug.log "msg" msg
+    in
+        ( model
+        , Cmd.none
+        )
 
 
 
@@ -80,10 +87,42 @@ update msg model =
 view : Model -> Html.Html Msg
 view model =
     let
-        foo =
-            List.map (\shape -> draw shape.color shape.points) model.shapes
+        svgShapes =
+            List.map (\shape -> draw [ onMouseDown ] shape.color shape.points) model.shapes
     in
-        svg [ viewBox "-3 -3 10 10" ] foo
+        div []
+            [ svg
+                [ Svg.Attributes.width "640"
+                , Svg.Attributes.height "480"
+                , viewBox "-3 -3 10 10"
+                ]
+                svgShapes
+            , div
+                []
+                [ Html.text <| toString model ]
+            ]
+
+
+onMouseDown : Svg.Attribute Msg
+onMouseDown =
+    on "mousedown" (Decode.map DragStart Mouse.position)
+
+
+
+-- SUBSCRIPTIONS
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    case model.drag of
+        Nothing ->
+            Sub.none
+
+        Just _ ->
+            Sub.batch
+                [ Mouse.moves DragAt
+                , Mouse.ups DragEnd
+                ]
 
 
 main =
@@ -91,5 +130,5 @@ main =
         { init = init
         , view = view
         , update = update
-        , subscriptions = \_ -> Sub.none
+        , subscriptions = subscriptions
         }

@@ -88,16 +88,22 @@ square =
     ]
 
 
-draw : String -> List Point -> Svg msg
-draw color ps =
-    polygon
-        [ ps
-            |> List.concatMap (\( x, y ) -> [ x, y ])
-            |> List.map toString
-            |> String.join ","
-            |> points
-        , fill color
-        , stroke "white"
-        , strokeWidth "0.05"
-        ]
-        []
+draw : List (Attribute msg) -> String -> List Point -> Svg msg
+draw givenAttributes color ps =
+    let
+        allAttributes =
+            List.append
+                givenAttributes
+                [ ps
+                    |> List.concatMap (\( x, y ) -> [ x, y ])
+                    |> List.map toString
+                    |> String.join ","
+                    |> points
+                , fill color
+                , stroke "white"
+                , strokeWidth "0.05"
+                ]
+    in
+        polygon
+            allAttributes
+            []
