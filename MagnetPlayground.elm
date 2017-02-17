@@ -4,19 +4,27 @@ import MagnetPieces exposing (..)
 import Svg exposing (Svg, svg)
 import Svg.Attributes exposing (viewBox)
 import Html exposing (div)
-import Html.Attributes
 import Mouse
 import Html.Events exposing (on)
 import Json.Decode as Decode exposing (int, field)
 import Dict
 
 
+colors : { gray : String, green : String, orange : String, blue : String }
 colors =
     { gray = "#5a6378"
     , green = "#83c833"
     , orange = "#efa500"
     , blue = "#5fb4ca"
     }
+
+
+type alias Sizes =
+    { canvasSize : Size, viewBoxSize : Size, viewBoxOffset : Point }
+
+
+type alias Size =
+    { width : Float, height : Float }
 
 
 type alias Shape =
@@ -33,12 +41,7 @@ type alias Shape =
 type alias Model =
     { shapes : Dict.Dict String Shape
     , drag : Maybe Drag
-    }
-
-
-type alias ShapePosition =
-    { shapeId : String
-    , pointOnCanvas : Point
+    , sizes : Sizes
     }
 
 
@@ -48,11 +51,10 @@ type alias Drag =
     }
 
 
-type Msg
-    = DragStart ShapePosition
-    | DragAt Point
-    | DragEnd Point
-    | MouseOver ShapePosition
+type alias ShapePosition =
+    { shapeId : String
+    , pointOnCanvas : Point
+    }
 
 
 initialShapes : List { points : List Point, color : String }
@@ -79,6 +81,11 @@ init =
     in
         ( { shapes = Dict.fromList (List.map (\shape -> ( shape.id, shape )) shapesWithId)
           , drag = Nothing
+          , sizes =
+                { canvasSize = (Size 640 480)
+                , viewBoxSize = (Size 10 10)
+                , viewBoxOffset = (Point -3 -3)
+                }
           }
         , Cmd.none
         )
@@ -88,55 +95,79 @@ init =
 -- UPDATE
 
 
+type Msg
+    = DragStart ShapePosition
+    | DragAt Point
+    | DragEnd Point
+    | MouseOver ShapePosition
+
+
+scaleWith : Size -> Point -> Point
+scaleWith scaleFactor pt =
+    Point (pt.x / scaleFactor.width) (pt.y / scaleFactor.height)
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    -- let
-    --     _ =
-    --         Debug.log "msg" msg
-    -- in
-    case msg of
-        DragStart shapePosition ->
-            ( { model | drag = Just { start = shapePosition, current = shapePosition.pointOnCanvas } }
-            , Cmd.none
-            )
+    let
+        scaleFactor =
+            { width = model.sizes.canvasSize.width / model.sizes.viewBoxSize.width
+            , height = model.sizes.canvasSize.height / model.sizes.viewBoxSize.height
+            }
+    in
+        -- let
+        --     _ =
+        --         Debug.log "msg" msg
+        -- in
+        case msg of
+            DragStart shapePosition ->
+                ( { model | drag = Just { start = shapePosition, current = shapePosition.pointOnCanvas } }
+                , Cmd.none
+                )
 
-        DragAt position ->
-            case model.drag of
-                Nothing ->
-                    ( model, Cmd.none )
+            DragAt position ->
+                case model.drag of
+                    Nothing ->
+                        ( model, Cmd.none )
 
-                Just drag ->
-                    let
-                        diff =
-                            pointDiff drag.current position
+                    Just drag ->
+                        let
+                            diff =
+                                pointDiff drag.current position
+                                    |> scaleWith scaleFactor
 
-                        shapeId =
-                            drag.start.shapeId
-                    in
-                        case Dict.get shapeId model.shapes of
-                            Just draggedShape ->
-                                let
-                                    newShapePoints =
-                                        (add diff draggedShape.points)
+                            shapeId =
+                                drag.start.shapeId
+                        in
+                            case Dict.get shapeId model.shapes of
+                                Just draggedShape ->
+                                    let
+                                        newShapePoints =
+                                            (add diff draggedShape.points)
 
-                                    updatedShape =
-                                        { draggedShape | points = newShapePoints }
+                                        updatedShape =
+                                            { draggedShape | points = newShapePoints }
 
-                                    updatedShapesDict =
-                                        Dict.insert shapeId updatedShape model.shapes
-                                in
-                                    ( { model | shapes = updatedShapesDict, drag = Just { drag | current = position } }, Cmd.none )
+                                        updatedShapesDict =
+                                            Dict.insert shapeId updatedShape model.shapes
+                                    in
+                                        ( { model
+                                            | shapes = updatedShapesDict
+                                            , drag = Just { drag | current = position }
+                                          }
+                                        , Cmd.none
+                                        )
 
-                            Nothing ->
-                                ( model, Cmd.none )
+                                Nothing ->
+                                    ( model, Cmd.none )
 
-        DragEnd position ->
-            ( { model | drag = Nothing }, Cmd.none )
+            DragEnd position ->
+                ( { model | drag = Nothing }, Cmd.none )
 
-        _ ->
-            ( model
-            , Cmd.none
-            )
+            _ ->
+                ( model
+                , Cmd.none
+                )
 
 
 
@@ -153,12 +184,22 @@ view model =
 
         svgShapes =
             List.map (\shape -> draw (eventHanderAttributes shape) shape.color shape.points) (Dict.values model.shapes)
+
+        viewBoxOffsetString =
+            [ model.sizes.viewBoxOffset.x
+            , model.sizes.viewBoxOffset.y
+            , model.sizes.viewBoxSize.width
+            , model.sizes.viewBoxSize.height
+            ]
+                |> List.map (\n -> floor n)
+                |> List.map toString
+                |> String.join " "
     in
         div []
             [ svg
-                [ Svg.Attributes.width "640"
-                , Svg.Attributes.height "480"
-                , viewBox "-3 -3 10 10"
+                [ Svg.Attributes.width (toString model.sizes.canvasSize.width)
+                , Svg.Attributes.height (toString model.sizes.canvasSize.height)
+                , viewBox viewBoxOffsetString
                 ]
                 svgShapes
             , div
@@ -167,6 +208,7 @@ view model =
             ]
 
 
+pointDecoder : Decode.Decoder Point
 pointDecoder =
     (Decode.map2
         Point
@@ -221,6 +263,7 @@ subscriptions model =
 --Sub.none
 
 
+main : Program Never Model Msg
 main =
     Html.program
         { init = init
