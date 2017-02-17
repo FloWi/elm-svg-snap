@@ -5,7 +5,7 @@ import Svg exposing (Svg, svg)
 import Svg.Attributes exposing (viewBox)
 import Html exposing (div)
 import Html.Attributes
-import Mouse exposing (Position)
+import Mouse
 import Html.Events exposing (on)
 import Json.Decode as Decode
 
@@ -21,6 +21,7 @@ colors =
 type alias Shape =
     { points : List Point
     , color : String
+    , id : String
     }
 
 
@@ -42,27 +43,40 @@ type alias Drag =
 
 
 type Msg
-    = DragStart Position
-    | DragAt Position
-    | DragEnd Position
-    | MouseOver Position
+    = DragStart Mouse.Position
+    | DragAt Mouse.Position
+    | DragEnd Mouse.Position
+    | MouseOver Mouse.Position
+
+
+initialShapes : List { points : List Point, color : String }
+initialShapes =
+    [ { points = triangle 2 |> rotate (45 + 180)
+      , color = colors.gray
+      }
+    , { points = triangle 2 |> rotate -45
+      , color = colors.blue
+      }
+    ]
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( { shapes =
-            [ { points = triangle 2 |> rotate (45 + 180)
-              , color = colors.gray
-              }
-            , { points = triangle 2 |> rotate -45
-              , color = colors.blue
-              }
-            ]
-      , drag = Nothing
-      , mouseOver = Nothing
-      }
-    , Cmd.none
-    )
+    let
+        addIdToShape : Int -> { points : List Point, color : String } -> Shape
+        addIdToShape id x =
+            { points = x.points, color = x.color, id = toString id }
+
+        shapesWithId : List Shape
+        shapesWithId =
+            List.indexedMap addIdToShape initialShapes
+    in
+        ( { shapes = shapesWithId
+          , drag = Nothing
+          , mouseOver = Nothing
+          }
+        , Cmd.none
+        )
 
 
 
