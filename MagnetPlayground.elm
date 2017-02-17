@@ -8,6 +8,7 @@ import Html.Attributes
 import Mouse
 import Html.Events exposing (on)
 import Json.Decode as Decode exposing (int, field)
+import Dict
 
 
 colors =
@@ -30,7 +31,7 @@ type alias Shape =
 
 
 type alias Model =
-    { shapes : List Shape
+    { shapes : Dict.Dict String Shape
     , drag : Maybe Drag
     }
 
@@ -76,7 +77,7 @@ init =
         shapesWithId =
             List.indexedMap addIdToShape initialShapes
     in
-        ( { shapes = shapesWithId
+        ( { shapes = Dict.fromList (List.map (\shape -> ( shape.id, shape )) shapesWithId)
           , drag = Nothing
           }
         , Cmd.none
@@ -109,10 +110,28 @@ update msg model =
                         diff =
                             pointDiff drag.current position
 
-                        _ =
-                            Debug.log "dragged " diff
+                        shapeId =
+                            drag.start.shapeId
                     in
-                        ( model, Cmd.none )
+                        case Dict.get shapeId model.shapes of
+                            Just draggedShape ->
+                                let
+                                    newShapePoints =
+                                        (add diff draggedShape.points)
+
+                                    updatedShape =
+                                        { draggedShape | points = newShapePoints }
+
+                                    updatedShapesDict =
+                                        Dict.insert shapeId updatedShape model.shapes
+                                in
+                                    ( { model | shapes = updatedShapesDict, drag = Just { drag | current = position } }, Cmd.none )
+
+                            Nothing ->
+                                ( model, Cmd.none )
+
+        DragEnd position ->
+            ( { model | drag = Nothing }, Cmd.none )
 
         _ ->
             ( model
@@ -133,7 +152,7 @@ view model =
             ]
 
         svgShapes =
-            List.map (\shape -> draw (eventHanderAttributes shape) shape.color shape.points) model.shapes
+            List.map (\shape -> draw (eventHanderAttributes shape) shape.color shape.points) (Dict.values model.shapes)
     in
         div []
             [ svg
@@ -194,7 +213,7 @@ subscriptions model =
         Just drag ->
             Sub.batch
                 [ Sub.map (\p -> DragAt p) (Mouse.moves mousePositionToPoint)
-                , Sub.map (\p -> DragAt p) (Mouse.ups mousePositionToPoint)
+                , Sub.map (\p -> DragEnd p) (Mouse.ups mousePositionToPoint)
                 ]
 
 
