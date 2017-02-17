@@ -3,9 +3,9 @@ module MagnetPlayground exposing (..)
 import MagnetPieces exposing (..)
 import Svg exposing (Svg, svg)
 import Svg.Attributes exposing (viewBox)
-import Html exposing (div)
+import Html exposing (div, hr)
 import Mouse
-import Html.Events exposing (on)
+import Html.Events exposing (on, onClick)
 import Json.Decode as Decode exposing (int, field)
 import Dict
 
@@ -57,34 +57,97 @@ type alias ShapePosition =
     }
 
 
+bigTriangleGray =
+    { points = triangle 2 |> rotate (45 + 180)
+    , color = colors.gray
+    }
+
+
+bigTriangleBlue =
+    { points = triangle 2 |> rotate -45
+    , color = colors.blue
+    }
+
+
+parallelogramGreen =
+    { points = parallelogram |> rotate -45 |> snap 1 (to bigTriangleGray.points 3)
+    , color = colors.green
+    }
+
+
+smallTriangleOrange =
+    { points = triangle 1 |> rotate (45 + 90)
+    , color = colors.orange
+    }
+
+
+mediumTriangleBlue =
+    { points = triangle (sqrt 2) |> rotate -90 |> snap 3 (to parallelogramGreen.points 4)
+    , color = colors.blue
+    }
+
+
+smallTriangleGreen =
+    { points = square |> rotate 45
+    , color = colors.green
+    }
+
+
+smallTriangleOrangeUpright =
+    { points = triangle 1 |> rotate 45 |> snap 3 (to bigTriangleBlue.points 2)
+    , color = colors.orange
+    }
+
+
 initialShapes : List { points : List Point, color : String }
 initialShapes =
-    [ { points = triangle 2 |> rotate (45 + 180)
-      , color = colors.gray
-      }
-    , { points = triangle 2 |> rotate -45
-      , color = colors.blue
-      }
+    [ bigTriangleGray
+    , bigTriangleBlue
+    , parallelogramGreen
+    , smallTriangleGreen
+    , smallTriangleOrangeUpright
+    , smallTriangleOrange
+    , mediumTriangleBlue
     ]
+
+
+solvedTangram =
+    initialShapes
+        |> List.indexedMap addIdToShape
+        |> List.map (\shape -> ( shape.id, shape ))
+        |> Dict.fromList
+
+
+addIdToShape : Int -> { points : List Point, color : String } -> Shape
+addIdToShape id x =
+    { points = x.points, color = x.color, id = toString id }
 
 
 init : ( Model, Cmd Msg )
 init =
     let
-        addIdToShape : Int -> { points : List Point, color : String } -> Shape
-        addIdToShape id x =
-            { points = x.points, color = x.color, id = toString id }
+        addOffsetToShape : Int -> Shape -> Shape
+        addOffsetToShape i shape =
+            let
+                yOffset =
+                    i // 3
 
-        shapesWithId : List Shape
-        shapesWithId =
+                xOffset =
+                    i % 3
+            in
+                { shape | points = (add (Point (toFloat xOffset * 2) (toFloat yOffset * 3)) shape.points) }
+
+        shapes : List Shape
+        shapes =
             List.indexedMap addIdToShape initialShapes
+                |> List.indexedMap (\i shape -> addOffsetToShape i shape)
     in
-        ( { shapes = Dict.fromList (List.map (\shape -> ( shape.id, shape )) shapesWithId)
+        ( { shapes = Dict.fromList (List.map (\shape -> ( shape.id, shape )) shapes)
           , drag = Nothing
           , sizes =
                 { canvasSize = (Size 640 480)
-                , viewBoxSize = (Size 10 10)
-                , viewBoxOffset = (Point -3 -3)
+                , viewBoxSize = (Size 8 8)
+                , viewBoxOffset = (Point -2 -2)
                 }
           }
         , Cmd.none
@@ -100,6 +163,7 @@ type Msg
     | DragAt Point
     | DragEnd Point
     | MouseOver ShapePosition
+    | PutIntoCorrectPositions
 
 
 scaleWith : Size -> Point -> Point
@@ -164,26 +228,32 @@ update msg model =
             DragEnd position ->
                 ( { model | drag = Nothing }, Cmd.none )
 
-            _ ->
-                ( model
-                , Cmd.none
-                )
+            MouseOver position ->
+                ( model, Cmd.none )
+
+            PutIntoCorrectPositions ->
+                ( { model | shapes = solvedTangram }, Cmd.none )
 
 
 
 -- VIEW
 
 
+(=>) =
+    (,)
+
+
 view : Model -> Html.Html Msg
 view model =
     let
-        eventHanderAttributes shape =
+        svgShapeAttributes shape =
             [ onMouseDown shape.id
             , onMouseHover shape.id
+            , Svg.Attributes.cursor "move"
             ]
 
         svgShapes =
-            List.map (\shape -> draw (eventHanderAttributes shape) shape.color shape.points) (Dict.values model.shapes)
+            List.map (\shape -> draw (svgShapeAttributes shape) shape.color shape.points) (Dict.values model.shapes)
 
         viewBoxOffsetString =
             [ model.sizes.viewBoxOffset.x
@@ -202,9 +272,13 @@ view model =
                 , viewBox viewBoxOffsetString
                 ]
                 svgShapes
+            , hr [] []
             , div
                 []
-                [ Html.text <| toString model ]
+                [ Html.button [ onClick PutIntoCorrectPositions ] [ Html.text "Put into correct positions" ]
+                ]
+            , hr [] []
+            , Html.text <| toString model
             ]
 
 
