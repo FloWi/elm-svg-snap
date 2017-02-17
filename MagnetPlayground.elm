@@ -3,6 +3,7 @@ module MagnetPlayground exposing (..)
 import MagnetPieces exposing (..)
 import Svg exposing (Svg, svg)
 import Svg.Attributes exposing (viewBox)
+import Html
 
 
 colors =
@@ -13,41 +14,82 @@ colors =
     }
 
 
-main : Svg msg
-main =
-    let
-        big1 =
-            triangle 2
-                |> rotate (45 + 180)
+type alias Shape =
+    { points : List Point
+    , color : String
+    }
 
-        big2 =
-            triangle 2
-                |> rotate -45
 
-        par =
-            parallelogram
-                |> rotate -45
-                |> snap 1 (to big1 3)
-    in
-        svg [ viewBox "-3 -3 10 10" ]
-            [ big1
-                |> draw colors.gray
-            , big2
-                |> draw colors.blue
-              -- , triangle 1
-              --     |> rotate (45 + 90)
-              --     |> draw colors.orange
-              -- , par
-              --     |> draw colors.green
-              -- , triangle (sqrt 2)
-              --     |> rotate -90
-              --     |> snap 3 (to par 4)
-              --     |> draw colors.blue
-              -- , square
-              --     |> rotate 45
-              --     |> draw colors.green
-              -- , triangle 1
-              --     |> rotate 45
-              --     |> snap 3 (to big2 2)
-              --     |> draw colors.orange
+
+-- MODEL
+
+
+type alias Model =
+    { shapes : List Shape
+    , drag : Maybe Drag
+    }
+
+
+type alias Drag =
+    { start : Point
+    , current : Point
+    }
+
+
+type Msg
+    = NothingYet
+
+
+
+-- | DragStart Position
+-- | DragAt Position
+-- | DragEnd Position
+
+
+init : ( Model, Cmd Msg )
+init =
+    ( { shapes =
+            [ { points = triangle 2 |> rotate (45 + 180)
+              , color = colors.gray
+              }
+            , { points = triangle 2 |> rotate -45
+              , color = colors.blue
+              }
             ]
+      , drag = Nothing
+      }
+    , Cmd.none
+    )
+
+
+
+-- UPDATE
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    ( model
+    , Cmd.none
+    )
+
+
+
+-- VIEW
+
+
+view : Model -> Html.Html Msg
+view model =
+    let
+        foo =
+            List.map (\shape -> draw shape.color shape.points) model.shapes
+    in
+        svg [ viewBox "-3 -3 10 10" ] foo
+
+
+main =
+    Html.program
+        { init = init
+        , view = view
+        , update = update
+        , subscriptions = \_ -> Sub.none
+        }
