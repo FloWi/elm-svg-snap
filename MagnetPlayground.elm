@@ -7,7 +7,7 @@ import Html exposing (div)
 import Html.Attributes
 import Mouse
 import Html.Events exposing (on)
-import Json.Decode as Decode
+import Json.Decode as Decode exposing (int, field)
 
 
 colors =
@@ -32,21 +32,26 @@ type alias Shape =
 type alias Model =
     { shapes : List Shape
     , drag : Maybe Drag
-    , mouseOver : Maybe Point
+    }
+
+
+type alias ShapePosition =
+    { shapeId : String
+    , pointOnCanvas : Point
     }
 
 
 type alias Drag =
-    { start : Point
+    { start : ShapePosition
     , current : Point
     }
 
 
 type Msg
-    = DragStart Mouse.Position
-    | DragAt Mouse.Position
-    | DragEnd Mouse.Position
-    | MouseOver Mouse.Position
+    = DragStart ShapePosition
+    | DragAt Point
+    | DragEnd Point
+    | MouseOver ShapePosition
 
 
 initialShapes : List { points : List Point, color : String }
@@ -73,7 +78,6 @@ init =
     in
         ( { shapes = shapesWithId
           , drag = Nothing
-          , mouseOver = Nothing
           }
         , Cmd.none
         )
@@ -85,13 +89,35 @@ init =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let
-        _ =
-            Debug.log "msg" msg
-    in
-        ( model
-        , Cmd.none
-        )
+    -- let
+    --     _ =
+    --         Debug.log "msg" msg
+    -- in
+    case msg of
+        DragStart shapePosition ->
+            ( { model | drag = Just { start = shapePosition, current = shapePosition.pointOnCanvas } }
+            , Cmd.none
+            )
+
+        DragAt position ->
+            case model.drag of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just drag ->
+                    let
+                        diff =
+                            pointDiff drag.current position
+
+                        _ =
+                            Debug.log "dragged " diff
+                    in
+                        ( model, Cmd.none )
+
+        _ ->
+            ( model
+            , Cmd.none
+            )
 
 
 
@@ -101,8 +127,13 @@ update msg model =
 view : Model -> Html.Html Msg
 view model =
     let
+        eventHanderAttributes shape =
+            [ onMouseDown shape.id
+            , onMouseHover shape.id
+            ]
+
         svgShapes =
-            List.map (\shape -> draw [ onMouseDown ] shape.color shape.points) model.shapes
+            List.map (\shape -> draw (eventHanderAttributes shape) shape.color shape.points) model.shapes
     in
         div []
             [ svg
@@ -117,13 +148,41 @@ view model =
             ]
 
 
-onMouseDown : Svg.Attribute Msg
-onMouseDown =
-    on "mousedown" (Decode.map DragStart Mouse.position)
+pointDecoder =
+    (Decode.map2
+        Point
+        (field "x" Decode.float)
+        (field "y" Decode.float)
+    )
+
+
+shapePositionDecoder : String -> Decode.Decoder ShapePosition
+shapePositionDecoder identifier =
+    (Decode.map2 ShapePosition
+        (Decode.succeed
+            identifier
+        )
+        pointDecoder
+    )
+
+
+onMouseDown : String -> Svg.Attribute Msg
+onMouseDown identifier =
+    on "mousedown" (Decode.map DragStart (shapePositionDecoder identifier))
+
+
+onMouseHover : String -> Svg.Attribute Msg
+onMouseHover identifier =
+    on "mousemove" (Decode.map MouseOver (shapePositionDecoder identifier))
 
 
 
 -- SUBSCRIPTIONS
+
+
+mousePositionToPoint : Mouse.Position -> Point
+mousePositionToPoint pos =
+    Point (toFloat pos.x) (toFloat pos.y)
 
 
 subscriptions : Model -> Sub Msg
@@ -132,11 +191,15 @@ subscriptions model =
         Nothing ->
             Sub.none
 
-        Just _ ->
+        Just drag ->
             Sub.batch
-                [ Mouse.moves DragAt
-                , Mouse.ups DragEnd
+                [ Sub.map (\p -> DragAt p) (Mouse.moves mousePositionToPoint)
+                , Sub.map (\p -> DragAt p) (Mouse.ups mousePositionToPoint)
                 ]
+
+
+
+--Sub.none
 
 
 main =
