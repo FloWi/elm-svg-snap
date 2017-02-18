@@ -4,6 +4,7 @@ import MagnetPieces exposing (..)
 import Svg exposing (Svg, svg)
 import Svg.Attributes exposing (viewBox)
 import Html exposing (div, hr)
+import Html.Attributes
 import Mouse
 import Html.Events exposing (on, onClick)
 import Json.Decode as Decode exposing (int, field)
@@ -43,6 +44,7 @@ type alias Model =
     { shapes : Dict.Dict String Shape
     , drag : Maybe Drag
     , sizes : Sizes
+    , showDebug : Bool
     }
 
 
@@ -145,6 +147,7 @@ init =
     in
         ( { shapes = Dict.fromList (List.map (\shape -> ( shape.id, shape )) shapes)
           , drag = Nothing
+          , showDebug = False
           , sizes =
                 { canvasSize = (Size 640 480)
                 , viewBoxSize = (Size 8 8)
@@ -165,6 +168,7 @@ type Msg
     | DragEnd Point
     | MouseOver ShapePosition
     | PutIntoCorrectPositions
+    | ToggleDebugOutput
 
 
 scaleWith : Size -> Point -> Point
@@ -266,6 +270,9 @@ update msg model =
             PutIntoCorrectPositions ->
                 ( { model | shapes = solvedTangram }, Cmd.none )
 
+            ToggleDebugOutput ->
+                ( { model | showDebug = not model.showDebug }, Cmd.none )
+
 
 
 -- VIEW
@@ -273,6 +280,16 @@ update msg model =
 
 (=>) =
     (,)
+
+
+checkbox : msg -> String -> Html.Html msg
+checkbox msg name =
+    Html.label
+        [ Html.Attributes.style [ ( "padding", "20px" ) ]
+        ]
+        [ Html.input [ Html.Attributes.type_ "checkbox", onClick msg ] []
+        , Html.text name
+        ]
 
 
 view : Model -> Html.Html Msg
@@ -310,10 +327,15 @@ view model =
             , hr [] []
             , div
                 []
-                [ Html.button [ onClick PutIntoCorrectPositions ] [ Html.text "Put into correct positions" ]
+                [ Html.button [ onClick PutIntoCorrectPositions ] [ Html.text "elm-ify svg-polygons" ]
+                , checkbox ToggleDebugOutput "Show Debug Output"
                 ]
             , hr [] []
-            , Html.text <| toString model
+            , Html.text <|
+                if (model.showDebug) then
+                    toString model
+                else
+                    ""
             ]
 
 
