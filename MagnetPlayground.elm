@@ -31,6 +31,7 @@ type alias Shape =
     { points : List Point
     , color : String
     , id : String
+    , zIndex : Int
     }
 
 
@@ -120,7 +121,7 @@ solvedTangram =
 
 addIdToShape : Int -> { points : List Point, color : String } -> Shape
 addIdToShape id x =
-    { points = x.points, color = x.color, id = toString id }
+    { points = x.points, color = x.color, id = toString id, zIndex = 0 }
 
 
 init : ( Model, Cmd Msg )
@@ -171,6 +172,24 @@ scaleWith scaleFactor pt =
     Point (pt.x / scaleFactor.width) (pt.y / scaleFactor.height)
 
 
+bringShapeToFront =
+    applyZIndexToShape 10
+
+
+bringShapeToBackToNormal =
+    applyZIndexToShape 0
+
+
+applyZIndexToShape : Int -> String -> Dict.Dict String Shape -> Dict.Dict String Shape
+applyZIndexToShape zIndex id shapes =
+    case Dict.get id shapes of
+        Nothing ->
+            shapes
+
+        Just shape ->
+            shapes |> Dict.insert id { shape | zIndex = zIndex }
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
@@ -185,7 +204,10 @@ update msg model =
         -- in
         case msg of
             DragStart shapePosition ->
-                ( { model | drag = Just { start = shapePosition, current = shapePosition.pointOnCanvas } }
+                ( { model
+                    | drag = Just { start = shapePosition, current = shapePosition.pointOnCanvas }
+                    , shapes = bringShapeToFront shapePosition.shapeId model.shapes
+                  }
                 , Cmd.none
                 )
 
@@ -226,7 +248,17 @@ update msg model =
                                     ( model, Cmd.none )
 
             DragEnd position ->
-                ( { model | drag = Nothing }, Cmd.none )
+                case model.drag of
+                    Nothing ->
+                        ( model, Cmd.none )
+
+                    Just drag ->
+                        ( { model
+                            | drag = Nothing
+                            , shapes = bringShapeToBackToNormal drag.start.shapeId model.shapes
+                          }
+                        , Cmd.none
+                        )
 
             MouseOver position ->
                 ( model, Cmd.none )
@@ -253,7 +285,10 @@ view model =
             ]
 
         svgShapes =
-            List.map (\shape -> draw (svgShapeAttributes shape) shape.color shape.points) (Dict.values model.shapes)
+            model.shapes
+                |> Dict.values
+                |> List.sortBy (\shape -> shape.zIndex)
+                |> List.map (\shape -> draw (svgShapeAttributes shape) shape.color shape.points)
 
         viewBoxOffsetString =
             [ model.sizes.viewBoxOffset.x
